@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>论文选择系统 - 多设备同步版</title>
     <style>
+        /* 保持所有样式不变 */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -172,10 +173,6 @@
             cursor: not-allowed;
         }
         
-        .action-btn:disabled:hover {
-            background-color: #95a5a6;
-        }
-        
         .empty-row {
             color: #95a5a6;
             font-style: italic;
@@ -267,18 +264,6 @@
             .container {
                 flex-direction: column;
             }
-            
-            .instructions {
-                padding: 20px;
-            }
-            
-            .instructions h3 {
-                font-size: 20px;
-            }
-            
-            .instructions li {
-                font-size: 15px;
-            }
         }
     </style>
 </head>
@@ -286,7 +271,7 @@
     <div class="header">
         <h1>论文选择系统 - 多设备同步版</h1>
         <p>请从右侧拖拽论文标题到左侧表格中对应的组号 - 数据在所有设备间同步</p>
-        <div class="sync-status" id="syncStatus">正在同步数据...</div>
+        <div class="sync-status" id="syncStatus">正在初始化...</div>
         <div class="time-info" id="timeInfo"></div>
     </div>
     
@@ -330,7 +315,6 @@
             <li><strong>删除操作</strong>：您只能删除自己的组，删除时会同时清除组号和论文选择</li>
             <li><strong>时间限制</strong>：选择论文后<strong>48小时内</strong>可以放弃选择，超过时间后将无法修改</li>
             <li><strong>自动同步</strong>：数据会在所有设备间自动同步，您可以看到其他用户的实时操作</li>
-            <li><strong>手动同步</strong>：点击"手动同步"按钮可以立即刷新数据</li>
         </ul>
         <div class="warning-note">
             ⚠️ 注意：请谨慎操作，删除自己的组别后无法恢复！
@@ -355,34 +339,47 @@
             "量子计算的发展现状与前景分析"
         ];
 
-        // 使用Google Apps Script作为后端
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFxD_LpUc2aqg4008HufowOM43J9ThOv3tM2iVolA7c0Utk1lCOqcFEcq63-4wRyDQ/exec'; // 需要替换为您的Google Apps Script URL
+        // ⚠️ 重要：替换为您的实际Google Apps Script URL
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxexjDjB-X550pnqP-bf09aqBQu-xeK524W0fu-AJ6LfA0QjFiPuzUZ1iiSf8CT_l4S/exec';
 
-        // 用户标识（使用本地存储来标识当前用户）
-        let currentUserGroupId = localStorage.getItem('currentUserGroupId') || '';
-        let selectionTimestamp = null;
         let users = [];
+        let selectionTimestamp = null;
+        let currentUserGroupId = localStorage.getItem('currentUserGroupId') || '';
 
         // 从服务器加载数据
         async function loadData() {
             try {
-                const response = await fetch(`${SCRIPT_URL}?action=get`);
+                updateSyncStatus('正在连接服务器...', 'info');
+                const response = await fetch(`${SCRIPT_URL}?action=get&t=${Date.now()}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
-                if (data && data.users) {
+                console.log('从服务器加载的数据:', data);
+                
+                if (data && Array.isArray(data.users)) {
                     users = data.users;
                     selectionTimestamp = data.timestamp;
                     updateSyncStatus('数据同步成功', 'success');
                     updateTimeInfo();
+                    return true;
+                } else {
+                    throw new Error('Invalid data format');
                 }
             } catch (error) {
                 console.error('加载数据失败:', error);
-                updateSyncStatus('同步失败，使用本地数据', 'warning');
+                updateSyncStatus('同步失败: ' + error.message, 'error');
+                return false;
             }
         }
 
         // 保存数据到服务器
         async function saveData(isNewSelection = false) {
             try {
+                updateSyncStatus('正在保存数据...', 'info');
+                
                 const timestamp = isNewSelection ? new Date().toISOString() : selectionTimestamp;
                 const response = await fetch(SCRIPT_URL, {
                     method: 'POST',
@@ -396,18 +393,26 @@
                     })
                 });
                 
-                if (response.ok) {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
                     if (isNewSelection) {
                         selectionTimestamp = timestamp;
                     }
-                    updateSyncStatus('数据已同步', 'success');
+                    updateSyncStatus('数据已保存', 'success');
                     updateTimeInfo();
+                    return true;
                 } else {
-                    throw new Error('服务器保存失败');
+                    throw new Error('Save failed');
                 }
             } catch (error) {
                 console.error('保存数据失败:', error);
-                updateSyncStatus('同步失败', 'error');
+                updateSyncStatus('保存失败: ' + error.message, 'error');
+                return false;
             }
         }
 
@@ -427,13 +432,15 @@
                 
                 if (response.ok) {
                     await loadData();
-                    renderUserTable();
-                    renderPaperList();
                     updateSyncStatus('组别已删除', 'success');
+                    return true;
+                } else {
+                    throw new Error('Delete failed');
                 }
             } catch (error) {
                 console.error('删除用户失败:', error);
                 updateSyncStatus('删除失败', 'error');
+                return false;
             }
         }
 
@@ -486,26 +493,29 @@
 
         // 初始化函数
         async function init() {
-            await loadData();
-            renderUserTable();
-            renderPaperList();
-            setupEventListeners();
+            updateSyncStatus('正在初始化...', 'info');
+            const success = await loadData();
             
-            // 设置自动同步（每10秒）
-            setInterval(async () => {
-                await loadData();
+            if (success) {
                 renderUserTable();
                 renderPaperList();
-            }, 10000);
+                setupEventListeners();
+                
+                // 设置自动同步（每15秒）
+                setInterval(async () => {
+                    await loadData();
+                    renderUserTable();
+                    renderPaperList();
+                }, 15000);
+            } else {
+                updateSyncStatus('初始化失败，请刷新页面重试', 'error');
+            }
         }
 
         // 渲染用户表格
         function renderUserTable() {
             const tbody = document.querySelector('#userTable tbody');
             tbody.innerHTML = '';
-            
-            // 先显示当前用户的组（如果有）
-            const currentUser = users.find(user => user.groupId === currentUserGroupId);
             
             users.forEach((user) => {
                 const tr = document.createElement('tr');
@@ -576,7 +586,6 @@
                 tbody.appendChild(tr);
             });
             
-            // 设置拖放事件
             setupDropZones();
         }
 
@@ -586,7 +595,6 @@
             paperList.innerHTML = '';
             
             papers.forEach((paper, index) => {
-                // 检查论文是否已被选择
                 const isAssigned = users.some(user => user.paper === paper);
                 
                 const paperDiv = document.createElement('div');
@@ -602,7 +610,6 @@
                 paperList.appendChild(paperDiv);
             });
             
-            // 设置拖拽事件
             setupDragEvents();
         }
 
@@ -631,7 +638,6 @@
 
         // 设置事件监听器
         function setupEventListeners() {
-            // 全局拖放事件
             document.addEventListener('dragover', function(e) {
                 e.preventDefault();
             });
@@ -640,19 +646,18 @@
                 e.preventDefault();
             });
             
-            // 添加组别按钮
             document.getElementById('addGroupBtn').addEventListener('click', handleAddGroup);
-            
-            // 手动同步按钮
             document.getElementById('syncBtn').addEventListener('click', handleManualSync);
         }
 
         // 处理手动同步
         async function handleManualSync() {
             updateSyncStatus('正在同步...', 'info');
-            await loadData();
-            renderUserTable();
-            renderPaperList();
+            const success = await loadData();
+            if (success) {
+                renderUserTable();
+                renderPaperList();
+            }
         }
 
         // 处理拖拽开始
@@ -705,12 +710,13 @@
             if (userIndex !== -1) {
                 users[userIndex].paper = paperTitle;
                 const isNewSelection = !selectionTimestamp;
-                await saveData(isNewSelection);
-                renderUserTable();
-                renderPaperList();
+                const success = await saveData(isNewSelection);
+                if (success) {
+                    renderUserTable();
+                    renderPaperList();
+                }
             }
             
-            // 移除拖拽元素的样式
             const draggingItem = document.querySelector('.paper-item.dragging');
             if (draggingItem) {
                 draggingItem.classList.remove('dragging');
@@ -728,10 +734,9 @@
                 users[userIndex].groupId = groupId;
                 currentUserGroupId = groupId;
                 localStorage.setItem('currentUserGroupId', groupId);
-                await saveData();
+                const success = await saveData();
                 
-                // 如果组号改变，重新渲染表格
-                if (oldGroupId !== groupId) {
+                if (success && oldGroupId !== groupId) {
                     renderUserTable();
                 }
             }
@@ -753,9 +758,11 @@
             const userIndex = users.findIndex(user => user.id === userId);
             if (userIndex !== -1) {
                 users[userIndex].paper = null;
-                await saveData();
-                renderUserTable();
-                renderPaperList();
+                const success = await saveData();
+                if (success) {
+                    renderUserTable();
+                    renderPaperList();
+                }
             }
         }
 
@@ -767,12 +774,15 @@
             
             const userId = parseInt(e.target.dataset.userId);
             
-            // 检查是否是当前用户
             const user = users.find(u => u.id === userId);
             if (user && user.groupId === currentUserGroupId) {
-                await deleteUser(userId);
-                currentUserGroupId = '';
-                localStorage.removeItem('currentUserGroupId');
+                const success = await deleteUser(userId);
+                if (success) {
+                    currentUserGroupId = '';
+                    localStorage.removeItem('currentUserGroupId');
+                    renderUserTable();
+                    renderPaperList();
+                }
             }
         }
 
@@ -788,7 +798,6 @@
                 return;
             }
             
-            // 检查组号是否已存在
             if (users.some(user => user.groupId === newGroupId)) {
                 alert('该组号已被使用，请使用其他组号！');
                 return;
@@ -798,9 +807,11 @@
             users.push({ id: newUserId, groupId: newGroupId, paper: null });
             currentUserGroupId = newGroupId;
             localStorage.setItem('currentUserGroupId', newGroupId);
-            await saveData();
-            renderUserTable();
-            renderPaperList();
+            const success = await saveData();
+            if (success) {
+                renderUserTable();
+                renderPaperList();
+            }
         }
 
         // 初始化应用
