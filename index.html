@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>论文选择系统 - 多设备同步版</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+            gap: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+            font-size: 16px;
+        }
+        
+        .user-table-container, .paper-list-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            flex: 1;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e1e1e1;
+        }
+        
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .paper-item {
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            cursor: grab;
+            transition: all 0.2s;
+            border-left: 4px solid #3498db;
+        }
+        
+        .paper-item:hover {
+            background-color: #e3f2fd;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .paper-item.dragging {
+            opacity: 0.5;
+        }
+        
+        .paper-item.assigned {
+            background-color: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+        
+        .drop-zone {
+            min-height: 50px;
+            border: 2px dashed #bdc3c7;
+            border-radius: 6px;
+            padding: 10px;
+            transition: all 0.2s;
+        }
+        
+        .drop-zone.active {
+            border-color: #3498db;
+            background-color: #e3f2fd;
+        }
+        
+        .action-btn {
+            padding: 6px 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+            margin: 2px;
+        }
+        
+        .action-btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .action-btn.cancel {
+            background-color: #e74c3c;
+        }
+        
+        .action-btn.cancel:hover {
+            background-color: #c0392b;
+        }
+        
+        .action-btn.add {
+            background-color: #2ecc71;
+        }
+        
+        .action-btn.add:hover {
+            background-color: #27ae60;
+        }
+        
+        .action-btn.sync {
+            background-color: #9b59b6;
+        }
+        
+        .action-btn.sync:hover {
+            background-color: #8e44ad;
+        }
+        
+        .action-btn.delete {
+            background-color: #e67e22;
+        }
+        
+        .action-btn.delete:hover {
+            background-color: #d35400;
+        }
+        
+        .action-btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .action-btn:disabled:hover {
+            background-color: #95a5a6;
+        }
+        
+        .empty-row {
+            color: #95a5a6;
+            font-style: italic;
+        }
+        
+        .instructions {
+            background-color: #e8f4fd;
+            border-left: 6px solid #3498db;
+            padding: 25px;
+            margin-top: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .instructions h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .instructions h3::before {
+            content: "💡";
+            font-size: 24px;
+        }
+        
+        .instructions ul {
+            padding-left: 25px;
+            margin-bottom: 15px;
+        }
+        
+        .instructions li {
+            margin-bottom: 12px;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        
+        .warning-note {
+            background-color: #fff8e1;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            font-weight: bold;
+            color: #e67e22;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        input[type="text"]:focus {
+            border-color: #3498db;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+        
+        .sync-status {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        
+        .time-info {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        
+        .user-row.other-user {
+            background-color: #f8f9fa;
+        }
+        
+        .user-row.other-user input {
+            background-color: #f1f2f6;
+            cursor: not-allowed;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .instructions {
+                padding: 20px;
+            }
+            
+            .instructions h3 {
+                font-size: 20px;
+            }
+            
+            .instructions li {
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>论文选择系统 - 多设备同步版</h1>
+        <p>请从右侧拖拽论文标题到左侧表格中对应的组号 - 数据在所有设备间同步</p>
+        <div class="sync-status" id="syncStatus">正在同步数据...</div>
+        <div class="time-info" id="timeInfo"></div>
+    </div>
+    
+    <div class="container">
+        <div class="user-table-container">
+            <h2 class="section-title">
+                用户选择表
+                <div>
+                    <button class="action-btn sync" id="syncBtn">手动同步</button>
+                    <button class="action-btn add" id="addGroupBtn">增加我的组别</button>
+                </div>
+            </h2>
+            <table id="userTable">
+                <thead>
+                    <tr>
+                        <th width="25%">组号</th>
+                        <th width="55%">论文名</th>
+                        <th width="20%">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 表格行将通过JavaScript动态生成 -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="paper-list-container">
+            <h2 class="section-title">可选论文列表</h2>
+            <div id="paperList">
+                <!-- 论文列表将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        <h3>重要使用说明</h3>
+        <ul>
+            <li><strong>在左侧表格中输入您的组号</strong> - 请确保组号准确无误</li>
+            <li><strong>从右侧列表中拖拽论文标题到左侧表格的"论文名"列</strong> - 每篇论文只能被一个用户选择</li>
+            <li><strong>权限说明</strong>：您只能修改自己组的行，其他用户的选择只能查看</li>
+            <li><strong>删除操作</strong>：您只能删除自己的组，删除时会同时清除组号和论文选择</li>
+            <li><strong>时间限制</strong>：选择论文后<strong>48小时内</strong>可以放弃选择，超过时间后将无法修改</li>
+            <li><strong>自动同步</strong>：数据会在所有设备间自动同步，您可以看到其他用户的实时操作</li>
+            <li><strong>手动同步</strong>：点击"手动同步"按钮可以立即刷新数据</li>
+        </ul>
+        <div class="warning-note">
+            ⚠️ 注意：请谨慎操作，删除自己的组别后无法恢复！
+        </div>
+    </div>
+
+    <script>
+        // 论文数据
+        const papers = [
+            "基于深度学习的图像识别技术研究",
+            "区块链技术在供应链金融中的应用",
+            "人工智能在医疗诊断中的最新进展",
+            "5G通信网络的安全与隐私保护",
+            "大数据分析在商业智能中的应用",
+            "物联网智能家居系统设计与实现",
+            "云计算环境下的资源调度优化",
+            "自然语言处理中的情感分析研究",
+            "计算机视觉在自动驾驶中的应用",
+            "边缘计算与物联网的融合研究",
+            "智能推荐系统的算法优化",
+            "虚拟现实与增强现实技术比较研究",
+            "量子计算的发展现状与前景分析"
+        ];
+
+        // 使用Google Apps Script作为后端
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyHvQoCumKezs7gHo3kMaFrmZPl9wcpnOSg2nHP73WSouOBhzNztojAlziLKeKgW6_Q/exec'; // 需要替换为您的Google Apps Script URL
+
+        // 用户标识（使用本地存储来标识当前用户）
+        let currentUserGroupId = localStorage.getItem('currentUserGroupId') || '';
+        let selectionTimestamp = null;
+        let users = [];
+
+        // 从服务器加载数据
+        async function loadData() {
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=get`);
+                const data = await response.json();
+                if (data && data.users) {
+                    users = data.users;
+                    selectionTimestamp = data.timestamp;
+                    updateSyncStatus('数据同步成功', 'success');
+                    updateTimeInfo();
+                }
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                updateSyncStatus('同步失败，使用本地数据', 'warning');
+            }
+        }
+
+        // 保存数据到服务器
+        async function saveData(isNewSelection = false) {
+            try {
+                const timestamp = isNewSelection ? new Date().toISOString() : selectionTimestamp;
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'save',
+                        users: users,
+                        timestamp: timestamp
+                    })
+                });
+                
+                if (response.ok) {
+                    if (isNewSelection) {
+                        selectionTimestamp = timestamp;
+                    }
+                    updateSyncStatus('数据已同步', 'success');
+                    updateTimeInfo();
+                } else {
+                    throw new Error('服务器保存失败');
+                }
+            } catch (error) {
+                console.error('保存数据失败:', error);
+                updateSyncStatus('同步失败', 'error');
+            }
+        }
+
+        // 删除用户
+        async function deleteUser(userId) {
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'deleteUser',
+                        userId: userId
+                    })
+                });
+                
+                if (response.ok) {
+                    await loadData();
+                    renderUserTable();
+                    renderPaperList();
+                    updateSyncStatus('组别已删除', 'success');
+                }
+            } catch (error) {
+                console.error('删除用户失败:', error);
+                updateSyncStatus('删除失败', 'error');
+            }
+        }
+
+        // 检查是否超过48小时
+        function isWithin48Hours() {
+            if (!selectionTimestamp) return true;
+            const selectionTime = new Date(selectionTimestamp);
+            const currentTime = new Date();
+            const diffHours = (currentTime - selectionTime) / (1000 * 60 * 60);
+            return diffHours <= 48;
+        }
+
+        // 更新时间信息显示
+        function updateTimeInfo() {
+            const timeInfo = document.getElementById('timeInfo');
+            if (!selectionTimestamp) {
+                timeInfo.textContent = '';
+                return;
+            }
+            
+            const selectionTime = new Date(selectionTimestamp);
+            const currentTime = new Date();
+            const diffHours = (currentTime - selectionTime) / (1000 * 60 * 60);
+            const remainingHours = Math.max(0, 48 - diffHours);
+            
+            if (remainingHours > 0) {
+                timeInfo.textContent = `距离放弃选择截止时间还有: ${remainingHours.toFixed(1)} 小时`;
+                timeInfo.style.color = '#27ae60';
+            } else {
+                timeInfo.textContent = '放弃选择时间已过，无法再修改选择';
+                timeInfo.style.color = '#e74c3c';
+            }
+        }
+
+        // 更新同步状态显示
+        function updateSyncStatus(message, type = 'info') {
+            const statusElement = document.getElementById('syncStatus');
+            statusElement.textContent = message;
+            
+            statusElement.style.color = 
+                type === 'success' ? '#27ae60' :
+                type === 'warning' ? '#f39c12' :
+                type === 'error' ? '#e74c3c' : '#7f8c8d';
+        }
+
+        // 获取下一个可用的用户ID
+        function getNextUserId() {
+            return users.length > 0 ? Math.max(...users.map(user => user.id)) + 1 : 1;
+        }
+
+        // 初始化函数
+        async function init() {
+            await loadData();
+            renderUserTable();
+            renderPaperList();
+            setupEventListeners();
+            
+            // 设置自动同步（每10秒）
+            setInterval(async () => {
+                await loadData();
+                renderUserTable();
+                renderPaperList();
+            }, 10000);
+        }
+
+        // 渲染用户表格
+        function renderUserTable() {
+            const tbody = document.querySelector('#userTable tbody');
+            tbody.innerHTML = '';
+            
+            // 先显示当前用户的组（如果有）
+            const currentUser = users.find(user => user.groupId === currentUserGroupId);
+            
+            users.forEach((user) => {
+                const tr = document.createElement('tr');
+                const isCurrentUser = user.groupId === currentUserGroupId;
+                
+                if (!isCurrentUser) {
+                    tr.classList.add('other-user');
+                }
+                
+                // 组号单元格
+                const groupTd = document.createElement('td');
+                if (isCurrentUser) {
+                    const groupInput = document.createElement('input');
+                    groupInput.type = 'text';
+                    groupInput.value = user.groupId;
+                    groupInput.placeholder = '请输入组号';
+                    groupInput.dataset.userId = user.id;
+                    groupInput.addEventListener('change', handleGroupIdChange);
+                    groupTd.appendChild(groupInput);
+                } else {
+                    groupTd.textContent = user.groupId || '未设置组号';
+                }
+                
+                // 论文名单元格
+                const paperTd = document.createElement('td');
+                paperTd.className = 'drop-zone';
+                paperTd.dataset.userId = user.id;
+                
+                if (user.paper) {
+                    const paperDiv = document.createElement('div');
+                    paperDiv.textContent = user.paper;
+                    paperDiv.className = 'paper-item assigned';
+                    paperTd.appendChild(paperDiv);
+                } else if (isCurrentUser) {
+                    paperTd.textContent = '拖放论文到这里';
+                    paperTd.classList.add('empty-row');
+                } else {
+                    paperTd.textContent = '未选择论文';
+                    paperTd.classList.add('empty-row');
+                }
+                
+                // 操作单元格
+                const actionTd = document.createElement('td');
+                if (isCurrentUser) {
+                    if (user.paper) {
+                        const cancelBtn = document.createElement('button');
+                        cancelBtn.textContent = '放弃选择';
+                        cancelBtn.className = 'action-btn cancel';
+                        cancelBtn.dataset.userId = user.id;
+                        cancelBtn.disabled = !isWithin48Hours();
+                        cancelBtn.addEventListener('click', handleCancelSelection);
+                        actionTd.appendChild(cancelBtn);
+                    }
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = '删除我的组';
+                    deleteBtn.className = 'action-btn delete';
+                    deleteBtn.dataset.userId = user.id;
+                    deleteBtn.addEventListener('click', handleDeleteUser);
+                    actionTd.appendChild(deleteBtn);
+                } else {
+                    actionTd.textContent = '-';
+                }
+                
+                tr.appendChild(groupTd);
+                tr.appendChild(paperTd);
+                tr.appendChild(actionTd);
+                tbody.appendChild(tr);
+            });
+            
+            // 设置拖放事件
+            setupDropZones();
+        }
+
+        // 渲染论文列表
+        function renderPaperList() {
+            const paperList = document.getElementById('paperList');
+            paperList.innerHTML = '';
+            
+            papers.forEach((paper, index) => {
+                // 检查论文是否已被选择
+                const isAssigned = users.some(user => user.paper === paper);
+                
+                const paperDiv = document.createElement('div');
+                paperDiv.textContent = paper;
+                paperDiv.className = 'paper-item';
+                paperDiv.dataset.paperIndex = index;
+                paperDiv.draggable = !isAssigned;
+                
+                if (isAssigned) {
+                    paperDiv.classList.add('assigned');
+                }
+                
+                paperList.appendChild(paperDiv);
+            });
+            
+            // 设置拖拽事件
+            setupDragEvents();
+        }
+
+        // 设置拖拽事件
+        function setupDragEvents() {
+            const paperItems = document.querySelectorAll('.paper-item');
+            
+            paperItems.forEach(item => {
+                if (item.draggable) {
+                    item.addEventListener('dragstart', handleDragStart);
+                }
+            });
+        }
+
+        // 设置放置区域事件
+        function setupDropZones() {
+            const dropZones = document.querySelectorAll('.drop-zone');
+            
+            dropZones.forEach(zone => {
+                zone.addEventListener('dragover', handleDragOver);
+                zone.addEventListener('dragenter', handleDragEnter);
+                zone.addEventListener('dragleave', handleDragLeave);
+                zone.addEventListener('drop', handleDrop);
+            });
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 全局拖放事件
+            document.addEventListener('dragover', function(e) {
+                e.preventDefault();
+            });
+            
+            document.addEventListener('drop', function(e) {
+                e.preventDefault();
+            });
+            
+            // 添加组别按钮
+            document.getElementById('addGroupBtn').addEventListener('click', handleAddGroup);
+            
+            // 手动同步按钮
+            document.getElementById('syncBtn').addEventListener('click', handleManualSync);
+        }
+
+        // 处理手动同步
+        async function handleManualSync() {
+            updateSyncStatus('正在同步...', 'info');
+            await loadData();
+            renderUserTable();
+            renderPaperList();
+        }
+
+        // 处理拖拽开始
+        function handleDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.textContent);
+            e.target.classList.add('dragging');
+        }
+
+        // 处理拖拽悬停
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        // 处理拖拽进入
+        function handleDragEnter(e) {
+            e.preventDefault();
+            e.target.classList.add('active');
+        }
+
+        // 处理拖拽离开
+        function handleDragLeave(e) {
+            e.target.classList.remove('active');
+        }
+
+        // 处理放置
+        async function handleDrop(e) {
+            e.preventDefault();
+            e.target.classList.remove('active');
+            
+            const paperTitle = e.dataTransfer.getData('text/plain');
+            const userId = parseInt(e.target.dataset.userId);
+            
+            // 检查是否是当前用户
+            const user = users.find(u => u.id === userId);
+            if (!user || user.groupId !== currentUserGroupId) {
+                alert('您只能为自己的组选择论文！');
+                return;
+            }
+            
+            // 检查论文是否已被选择
+            const isPaperAssigned = users.some(user => user.paper === paperTitle);
+            
+            if (isPaperAssigned) {
+                alert('该论文已被其他用户选择，请选择其他论文。');
+                return;
+            }
+            
+            // 更新用户数据
+            const userIndex = users.findIndex(user => user.id === userId);
+            if (userIndex !== -1) {
+                users[userIndex].paper = paperTitle;
+                const isNewSelection = !selectionTimestamp;
+                await saveData(isNewSelection);
+                renderUserTable();
+                renderPaperList();
+            }
+            
+            // 移除拖拽元素的样式
+            const draggingItem = document.querySelector('.paper-item.dragging');
+            if (draggingItem) {
+                draggingItem.classList.remove('dragging');
+            }
+        }
+
+        // 处理组号变更
+        async function handleGroupIdChange(e) {
+            const userId = parseInt(e.target.dataset.userId);
+            const groupId = e.target.value;
+            
+            const userIndex = users.findIndex(user => user.id === userId);
+            if (userIndex !== -1) {
+                const oldGroupId = users[userIndex].groupId;
+                users[userIndex].groupId = groupId;
+                currentUserGroupId = groupId;
+                localStorage.setItem('currentUserGroupId', groupId);
+                await saveData();
+                
+                // 如果组号改变，重新渲染表格
+                if (oldGroupId !== groupId) {
+                    renderUserTable();
+                }
+            }
+        }
+
+        // 处理放弃选择
+        async function handleCancelSelection(e) {
+            if (!isWithin48Hours()) {
+                alert('已超过48小时，无法放弃选择！');
+                return;
+            }
+            
+            if (!confirm('确定要放弃当前选择的论文吗？')) {
+                return;
+            }
+            
+            const userId = parseInt(e.target.dataset.userId);
+            
+            const userIndex = users.findIndex(user => user.id === userId);
+            if (userIndex !== -1) {
+                users[userIndex].paper = null;
+                await saveData();
+                renderUserTable();
+                renderPaperList();
+            }
+        }
+
+        // 处理删除用户
+        async function handleDeleteUser(e) {
+            if (!confirm('确定要删除您的组吗？这将清除您的组号和论文选择！')) {
+                return;
+            }
+            
+            const userId = parseInt(e.target.dataset.userId);
+            
+            // 检查是否是当前用户
+            const user = users.find(u => u.id === userId);
+            if (user && user.groupId === currentUserGroupId) {
+                await deleteUser(userId);
+                currentUserGroupId = '';
+                localStorage.removeItem('currentUserGroupId');
+            }
+        }
+
+        // 处理添加组别
+        async function handleAddGroup() {
+            if (currentUserGroupId && users.some(user => user.groupId === currentUserGroupId)) {
+                alert('您已经有一个组了！每个用户只能有一个组。');
+                return;
+            }
+            
+            const newGroupId = prompt('请输入您的组号：');
+            if (!newGroupId) {
+                return;
+            }
+            
+            // 检查组号是否已存在
+            if (users.some(user => user.groupId === newGroupId)) {
+                alert('该组号已被使用，请使用其他组号！');
+                return;
+            }
+            
+            const newUserId = getNextUserId();
+            users.push({ id: newUserId, groupId: newGroupId, paper: null });
+            currentUserGroupId = newGroupId;
+            localStorage.setItem('currentUserGroupId', newGroupId);
+            await saveData();
+            renderUserTable();
+            renderPaperList();
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
